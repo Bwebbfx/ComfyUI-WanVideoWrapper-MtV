@@ -1,3 +1,10 @@
+CUSTOM MODIFICATION TO MAKE MULTITALKING AND VACE WORK TOGETHER
+
+This is a modified fork of kijais Multitalking implementation modified to work with VACE. Nothing else is modified!
+
+
+
+
 # ComfyUI wrapper nodes for [WanVideo](https://github.com/Wan-Video/Wan2.1)
 
 # WORK IN PROGRESS
