@@ -656,7 +656,7 @@ class WanAttentionBlock(nn.Module):
                 x = self.cross_attn_ffn(x, context, context_lens, e, clip_embed=clip_embed, grid_sizes=grid_sizes, 
                                         audio_proj=audio_proj, audio_context_lens=audio_context_lens, audio_scale=audio_scale, 
                                         num_latent_frames=num_latent_frames, nag_params=nag_params, nag_context=nag_context, is_uncond=is_uncond, 
-                                        multitalk_audio_embedding=multitalk_audio_embedding, x_ref_attn_map=x_ref_attn_map, human_num=human_num)
+                                        multitalk_audio_embedding=multitalk_audio_embedding, human_num=human_num)
         else:
             y = self.ffn(self.norm2(x) * (1 + e[4]) + e[3])
             x = x + (y * e[5])
@@ -671,7 +671,7 @@ class WanAttentionBlock(nn.Module):
                                     audio_proj=audio_proj, audio_context_lens=audio_context_lens, audio_scale=audio_scale, 
                                     num_latent_frames=num_latent_frames, nag_params=nag_params, nag_context=nag_context, is_uncond=is_uncond)
             #multitalk
-            if multitalk_audio_embedding is not None:
+            if multitalk_audio_embedding is not None and hasattr(self, 'audio_cross_attn') and self.audio_cross_attn is not None:
                 x_audio = self.audio_cross_attn(self.norm_x(x), encoder_hidden_states=multitalk_audio_embedding,
                                             shape=grid_sizes[0], x_ref_attn_map=x_ref_attn_map, human_num=human_num)
                 x = x + x_audio * audio_scale
@@ -757,6 +757,9 @@ class VaceWanAttentionBlock(WanAttentionBlock):
         self.after_proj = nn.Linear(self.dim, self.dim)
         nn.init.zeros_(self.after_proj.weight)
         nn.init.zeros_(self.after_proj.bias)
+        # Placeholder for audio cross-attention to maintain compatibility with multitalk blocks
+        # This block type does not use audio input, so set to None by default
+        self.audio_cross_attn = None
 
     def forward(self, c_list, x, intermediate_device=None, nonblocking=True, **kwargs):
         if self.block_id == 0:
@@ -1454,6 +1457,10 @@ class WanModel(ModelMixin, ConfigMixin):
                 self.img_emb.to(self.offload_device, non_blocking=self.use_non_blocking)
 
         # MultiTalk
+        # defaults for optional multitalk branch
+        multitalk_audio_embedding = None
+        human_num = 0
+
         if multitalk_audio is not None:
             audio_cond = multitalk_audio.to(device=x.device, dtype=x.dtype)
             first_frame_audio_emb_s = audio_cond[:, :1, ...] 
@@ -1569,6 +1576,7 @@ class WanModel(ModelMixin, ConfigMixin):
                     dwpose_emb = unianim_data['dwpose']
                     x += dwpose_emb * unianim_data['strength']
             # arguments
+            x_ref_attn_map = None  # ensure variable exists for kwargs
             kwargs = dict(
                 e=e0,
                 seq_lens=seq_lens,
@@ -1589,10 +1597,7 @@ class WanModel(ModelMixin, ConfigMixin):
                 nag_params=nag_params,
                 nag_context=nag_context,
                 is_uncond = is_uncond,
-                multitalk_audio_embedding=multitalk_audio_embedding if multitalk_audio is not None else None,
-                ref_target_masks=ref_target_masks if multitalk_audio is not None else None,
-                human_num=human_num if multitalk_audio is not None else 0
-                )
+                multitalk_audio_embedding=multitalk_audio_embedding, human_num=human_num)
             
             if vace_data is not None:
                 vace_hint_list = []
